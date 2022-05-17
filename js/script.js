@@ -6,12 +6,19 @@ const manager = new THREE.LoadingManager(function () {
 })
 const loader = new THREE.FileLoader(manager)
 let fShader, vShader;
+let sunFShader, sunVShader
 THREE.Cache.enabled = true;
 loader.load('../shaders/shader.vert', function (data) {
     vShader = data;
 },);
 loader.load('../shaders/shader.frag', function (data) {
     fShader = data;
+},);
+loader.load('../shaders/sun/shader.frag', function (data) {
+    sunFShader = data;
+},);
+loader.load('../shaders/sun/shader.vert', function (data) {
+    sunVShader = data;
 },);
 
 function setVertexPoint(i, array, point) {
@@ -21,11 +28,11 @@ function setVertexPoint(i, array, point) {
     array[index + 2] = point.z
 }
 
-function indexFromCoords(x, y, rowWidth = 257) {
+function indexFromCoords(x, y, rowWidth = 513) {
     return (rowWidth * y) + x
 }
 
-function coordsFromIndex(index, rowWidth = 257) {
+function coordsFromIndex(index, rowWidth = 513) {
     return new THREE.Vector2(index % rowWidth, Math.floor(index / rowWidth))
 }
 
@@ -59,7 +66,9 @@ class Plane {
             const point = resolvedVertices[i]
             let vertexDistance = 0
             if (Math.round(Math.random() * 100) === 1) {
-                let newPoint = new THREE.Vector3(point.x, point.y, Math.random() * 20)
+                const pointHeight = Math.random() * 20
+                let newPoint = new THREE.Vector3(point.x, point.y, pointHeight)
+
                 setVertexPoint(i, geometry.attributes.position.array, newPoint)
                 vertexDistance = Math.round(Math.abs(newPoint.z / 10))
                 const coords = coordsFromIndex(i)
@@ -74,7 +83,8 @@ class Plane {
                             continue
                         }
                         const height = (Math.abs(x) !== Math.abs(y)) ? Math.max(Math.abs(x), Math.abs(y)) : Math.abs(x)
-                        setVertexPoint(index, geometry.attributes.position.array, new THREE.Vector3(adjacentPoint.x, adjacentPoint.y, ((newPoint.z) / height)))
+                        // const height = Math.max(Math.abs(x), Math.abs(y))
+                        setVertexPoint(index, geometry.attributes.position.array, new THREE.Vector3(adjacentPoint.x, adjacentPoint.y, ((pointHeight) / height)))
                     }
                 }
                 if (Math.round(Math.random() * 3) === 1 && vertexDistance > 0) {
@@ -175,16 +185,18 @@ const init = () => {
         cancelAnimationFrame(raf);
     }
 
-    const light = new THREE.PointLight(0xffffff, 1.25, 1000);
-    light.castShadow = true
-    light.shadow.mapSize.width = 8192
-    light.shadow.mapSize.height = 8192
-    light.shadow.camera.far = 500
-    light.shadow.camera.near = 0.5
+    const sunlight = new THREE.PointLight("#fdf4e4", 1.25, 1000);
+    sunlight.castShadow = true
+    sunlight.shadow.mapSize.width = 8192
+    sunlight.shadow.mapSize.height = 8192
+    sunlight.shadow.camera.far = 500
+    sunlight.shadow.camera.near = 0.5
     // light.shadow.bias = 0.001
-    light.target = plane.mesh
-    light.position.set(100, 256, 100);
-    scene.add(light);
+    sunlight.target = plane.mesh
+    sunlight.position.set(100, 256, 100);
+    const sun = new THREE.Mesh(new THREE.SphereGeometry(3), new THREE.MeshBasicMaterial({color: 0xf5dd40}))
+    sunlight.add(sun)
+    scene.add(sunlight);
 
     // scene.add(new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), new THREE.MeshBasicMaterial({color: 0x00ff00})))
     // scene.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.BoxGeometry(10, 10, 10)), new THREE.LineBasicMaterial({color: 0x000000})))
