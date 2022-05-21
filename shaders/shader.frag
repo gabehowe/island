@@ -12,6 +12,6 @@ float rand(vec2 co){
 }
 void main(void) {
     float opacity = (96.0 - length(vPosition)) / 256.0 * 0.6;
-    gl_FragColor = vec4(ucolor, uopacity / opacity);
+    vec4 gl_FragColor = vec4(ucolor, uopacity / opacity);
 }
 

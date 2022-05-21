@@ -61,3 +61,6 @@
   left: 0;
   z-index: 1;
 }
+body {
+    background: #111111;
+}

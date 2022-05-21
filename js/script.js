@@ -1,12 +1,12 @@
 import {OrbitControls} from "./OrbitControls.js";
+import {Island, rotateAboutPoint} from "./island.js";
 
-var _instance;
 const manager = new THREE.LoadingManager(function () {
     init()
 })
 const loader = new THREE.FileLoader(manager)
 let fShader, vShader;
-let sunFShader, sunVShader
+let waterFShader, waterVShader
 THREE.Cache.enabled = true;
 loader.load('../shaders/shader.vert', function (data) {
     vShader = data;
@@ -14,119 +14,46 @@ loader.load('../shaders/shader.vert', function (data) {
 loader.load('../shaders/shader.frag', function (data) {
     fShader = data;
 },);
-loader.load('../shaders/sun/shader.frag', function (data) {
-    sunFShader = data;
+loader.load('../shaders/water/shader.frag', function (data) {
+    waterFShader = data;
 },);
-loader.load('../shaders/sun/shader.vert', function (data) {
-    sunVShader = data;
+loader.load('../shaders/water/shader.vert', function (data) {
+    waterVShader = data;
 },);
 
-function setVertexPoint(i, array, point) {
-    const index = i * 3
-    array[index] = point.x
-    array[index + 1] = point.y
-    array[index + 2] = point.z
-}
 
-function indexFromCoords(x, y, rowWidth = 513) {
-    return (rowWidth * y) + x
-}
-
-function coordsFromIndex(index, rowWidth = 513) {
-    return new THREE.Vector2(index % rowWidth, Math.floor(index / rowWidth))
-}
-
-function radToDeg(rad) {
-    return rad * (180.0 / Math.PI);
-}
-
-class Plane {
-    constructor(type = 1) {
+class Ocean {
+    constructor() {
         this.uniforms = {
-            time: {type: 'f', value: 0},
-            ucolor: {type: 'v3', value: new THREE.Vector3(1., 1., 1.)},
-            uopacity: {type: 'f', value: 0.5}
-        };
-        this.mesh = this.createMesh(type);
-        this.mesh.rotation.x = Math.PI * 1.5
+            time: {type: 'f', value: 0}
+        }
+        this.mesh = this.createMesh()
         this.time = 1;
-        _instance = this;
     }
 
-    createMesh(type) {
-        const geometry = new THREE.PlaneGeometry(512, 512, 512, 512)
-        console.log(geometry)
-        const vertices = geometry.attributes.position.array
-        const resolvedVertices = []
-        for (let i = 0; i < vertices.length; i += 3) {
-            resolvedVertices.push(new THREE.Vector3(vertices[i], vertices[i + 1], vertices[i + 2]))
-        }
-        const buildings = []
-        for (let i = 0; i < resolvedVertices.length; i++) {
-            const point = resolvedVertices[i]
-            let vertexDistance = 0
-            if (Math.round(Math.random() * 100) === 1) {
-                const pointHeight = Math.random() * 20
-                let newPoint = new THREE.Vector3(point.x, point.y, pointHeight)
-
-                setVertexPoint(i, geometry.attributes.position.array, newPoint)
-                vertexDistance = Math.round(Math.abs(newPoint.z / 10))
-                const coords = coordsFromIndex(i)
-                for (let x = -vertexDistance; x <= vertexDistance; x++) {
-                    for (let y = -vertexDistance; y <= vertexDistance; y++) {
-                        if (x === 0 && y === 0) {
-                            continue
-                        }
-                        const index = indexFromCoords(coords.x + x, coords.y + y)
-                        let adjacentPoint = resolvedVertices[index]
-                        if (!adjacentPoint) {
-                            continue
-                        }
-                        const height = (Math.abs(x) !== Math.abs(y)) ? Math.max(Math.abs(x), Math.abs(y)) : Math.abs(x)
-                        // const height = Math.max(Math.abs(x), Math.abs(y))
-                        setVertexPoint(index, geometry.attributes.position.array, new THREE.Vector3(adjacentPoint.x, adjacentPoint.y, ((pointHeight) / height)))
-                    }
-                }
-                if (Math.round(Math.random() * 3) === 1 && vertexDistance > 0) {
-                    newPoint.z += (Math.random() * 10) + 2.5
-                    setVertexPoint(i, geometry.attributes.position.array, newPoint)
-                }
-            }
-        }
-
-        // let material = new THREE.RawShaderMaterial({
-        //     uniforms: this.uniforms, vertexShader: vShader, fragmentShader: fShader, transparent: true
-        // })
-        let material = new THREE.MeshStandardMaterial()
+    createMesh() {
+        const size = 2048
+        const geometry = new THREE.PlaneBufferGeometry(size, size, size, size)
+        const material = new THREE.RawShaderMaterial({
+            uniforms: this.uniforms, vertexShader: waterVShader, fragmentShader: waterFShader, transparent: true
+        })
         material.flatShading = true
-
-        if (type === 0) {
-            material = new THREE.RawShaderMaterial({
-                uniforms: this.uniforms,
-                vertexShader: vShader,
-                fragmentShader: fShader,
-                color: 0xff0000,
-                transparent: true
-            })
-            return new THREE.LineSegments(new THREE.WireframeGeometry(geometry), material)
-        }
-
-        else if (type === 1) {
-            return new THREE.Mesh(geometry, material)
-        }
-        else {
-            return new THREE.Points(geometry)
-        }
+        material.depthWrite = false
+        const mesh = new THREE.Mesh(geometry, material)
+        mesh.renderOrder = 0
+        mesh.rotation.x = Math.PI * 1.5
+        mesh.position.y -= 3;
+        return mesh
     }
 
     render(time) {
-        this.uniforms.time.value += time * this.time;
+        this.uniforms.time.value += time * this.time
     }
 }
 
 const canvas = document.getElementById('canvas-webgl');
 const renderer = new THREE.WebGLRenderer({
-    antialias: true, canvas: canvas,
+    antialias: true, canvas: canvas, powerPreference: "high-performance"
 });
 
 const resizeWindow = () => {
@@ -141,16 +68,38 @@ const on = () => {
         resizeWindow();
     });
 }
-const render = () => {
-    plane.render(clock.getDelta());
-    controls.update()
-    plane.mesh.rotation.z += 0.00125
-    renderer.render(scene, camera);
-}
+
 let raf;
-const renderLoop = () => {
-    render();
-    raf = requestAnimationFrame(renderLoop);
+
+function render() {
+    stats.begin()
+    raf = requestAnimationFrame(render);
+    const delta = clock.getDelta()
+    island.render(delta);
+    if (sunlight.position.y < 0) {
+        rotateAboutPoint(sunlight, new THREE.Vector3(0.0, 0.0, 0.0), new THREE.Vector3(0.0, 0.0, 1.0), Math.PI * 0.1 / 180, true)
+        sunlight.intensity = 0
+        sunlight.distance = 0
+    }
+    else {
+        rotateAboutPoint(sunlight, new THREE.Vector3(0.0, 0.0, 0.0), new THREE.Vector3(0.0, 0.0, 1.0), Math.PI * 0.025 / 180, true)
+        sunlight.intensity = 1.25
+        sunlight.distance = 1000
+    }
+
+    controls.update()
+    // plane.mesh.rotation.z += 0.00125
+    renderer.autoClear = false;
+    renderer.clear();
+    camera.layers.set(1)
+    composer.render();
+
+    renderer.clearDepth()
+    camera.layers.set(0)
+    renderer.render(scene, camera);
+    stats.end()
+
+
 }
 
 //lively stuffs
@@ -162,20 +111,28 @@ let mmddyy = false;
 
 const dayArr = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
 
-let scene, camera, clock, plane, controls, light
-let background = "#0e0e0e";
+let scene, camera, clock, island, controls, composer, ocean, sun, sunlight, stats
+let background = "#005bc2";
 const init = () => {
     scene = new THREE.Scene();
-    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 10000);
+    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 10000);
     clock = new THREE.Clock();
-    plane = new Plane();
+
     renderer.setSize(window.innerWidth, window.innerHeight);
-    renderer.setClearColor(parseInt(background.replace('#', '0x')), 1.0);
+    renderer.setClearColor(background, 0.393);
     renderer.shadowMap.enabled = true
-    renderer.shadowMap.type = THREE.PCFShadowMap
-    camera.position.set(0, 50, 125);
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap
+    // camera.position.set(0, 50, 125);
+    camera.position.set(0, 350, 875)
     camera.lookAt(new THREE.Vector3(0, 28, 0));
+
+    stats = new Stats()
+    stats.showPanel(0)
+    document.body.appendChild(stats.domElement)
+
     controls = new OrbitControls(camera, renderer.domElement)
+    controls.autoRotate = true
+    controls.autoRotateSpeed = 0.3
     controls.update()
 
     while (scene.children.length > 0) {
@@ -184,100 +141,70 @@ const init = () => {
     if (raf) {
         cancelAnimationFrame(raf);
     }
+    // the city
+    island = new Island(1, scene);
+    console.log(island.buildings)
 
-    const sunlight = new THREE.PointLight("#fdf4e4", 1.25, 1000);
+    // the sun
+    sunlight = new THREE.DirectionalLight("#fdf4e4", 1.25);
+    sunlight.target = island.mesh
     sunlight.castShadow = true
-    sunlight.shadow.mapSize.width = 8192
-    sunlight.shadow.mapSize.height = 8192
-    sunlight.shadow.camera.far = 500
+    sunlight.shadow.cascades = 4;
+    // sunlight.shadow.mode = "practical"
+    sunlight.shadow.mapSize.width = 4096
+    sunlight.shadow.mapSize.height = 4096
+    sunlight.shadow.camera.far = 2048
+    sunlight.shadow.camera.left = -1024
+    sunlight.shadow.camera.right = 1024
+    sunlight.shadow.camera.top = -2024
+    sunlight.shadow.camera.bottom = 2024
     sunlight.shadow.camera.near = 0.5
-    // light.shadow.bias = 0.001
-    sunlight.target = plane.mesh
-    sunlight.position.set(100, 256, 100);
-    const sun = new THREE.Mesh(new THREE.SphereGeometry(3), new THREE.MeshBasicMaterial({color: 0xf5dd40}))
+    // sunlight.shadow.bias = 0.001
+    sunlight.target = island.mesh
+    sunlight.position.set(961, 50, -6);
+    sun = new THREE.Mesh(new THREE.SphereGeometry(9), new THREE.MeshBasicMaterial({color: "#eacf2e"}))
+    sun.layers.enable(1)
     sunlight.add(sun)
     scene.add(sunlight);
 
     // scene.add(new THREE.Mesh(new THREE.BoxGeometry(10, 10, 10), new THREE.MeshBasicMaterial({color: 0x00ff00})))
     // scene.add(new THREE.LineSegments(new THREE.WireframeGeometry(new THREE.BoxGeometry(10, 10, 10)), new THREE.LineBasicMaterial({color: 0x000000})))
 
-    plane.mesh.receiveShadow = true;
-    plane.mesh.castShadow = true;
-    plane.mesh.material.needsUpdate = true;
-    scene.add(plane.mesh);
+    ocean = new Ocean();
+    scene.add(ocean.mesh)
 
+
+    initBloom()
     on();
     resizeWindow();
-    renderLoop();
+    render();
 }
 
+function initBloom() {
 
-window.onresize = e => {
-    clockPos();
+    const renderScene = new THREE.RenderPass(scene, camera)
+
+    const effectFXAA = new THREE.ShaderPass(THREE.FXAAShader)
+    effectFXAA.uniforms.resolution.value.set(2 / window.innerWidth, 2 / window.innerHeight)
+
+    const bloomPass = new THREE.UnrealBloomPass(new THREE.Vector2(window.innerWidth, window.innerHeight), 1.5, 0.4, 0.85)
+    bloomPass.threshold = 0.21
+    bloomPass.strength = 2.2
+    bloomPass.radius = 1
+    bloomPass.renderToScreen = true
+
+    composer = new THREE.EffectComposer(renderer)
+    composer.setSize(window.innerWidth, window.innerHeight)
+
+    composer.addPass(renderScene)
+    composer.addPass(effectFXAA)
+    composer.addPass(bloomPass)
+
+    renderer.gammaInput = true
+    renderer.gammaOutput = true
+    renderer.toneMappingExposure = Math.pow(0.9, 4.0)
 }
 
-function
-
-clockPos() {
-    // const clockEl = document.querySelector('.p-summary');
-    // clockEl.style.left = window.innerWidth / 2 - clockEl.clientWidth / 2 + "px";
-}
-
-function
-
-UpdateClock() {
-
-    /*
-        const time = new Date();
-
-        let timeEl = document.getElementById('clock');
-        let dateEl = document.getElementById('date');
-        let dayEl = document.getElementById('day');
-
-        /!*
-        if(noDate && noClock){
-          dateEl.style.display="none";
-          dayEl.style.display="none";
-          timeEl.style.display="none";
-          return
-        }
-        *!/
-
-        if (noClock) timeEl.style.display = "none"; else timeEl.style.display = "block";
-
-        if (noDate) {
-            dateEl.style.display = "none";
-            dayEl.style.display = "none";
-        }
-        else {
-            dateEl.style.display = "block";
-            dayEl.style.display = "block";
-        }
-
-        let d = new Date();
-
-        if (_12hour) timeEl.innerHTML = `- ${new Intl.DateTimeFormat('en-US', {
-            'hour': '2-digit', 'minute': '2-digit', 'hour12': true
-        }).format(d)} -`.replace("AM", '')
-                        .replace("PM", ''); else timeEl.innerHTML = `- ${new Intl.DateTimeFormat('en-US', {
-            'hour': '2-digit', 'minute': '2-digit', 'hour12': false
-        }).format(d)} -`;
-
-        if (mmddyy) dateEl.innerText = new Intl.DateTimeFormat('en-US', {
-            'month': 'short', 'day': '2-digit', 'year': '2-digit'
-        }).format(d).replace(',', ''); else dateEl.innerText = new Intl.DateTimeFormat('en-GB', {
-            'day': '2-digit', 'month': '2-digit', 'year': '2-digit'
-        }).format(d).replace(',', '');
-
-        dayEl.innerText = dayArr[d.getDay()];
-
-        setTimeout(UpdateClock, 1000);
-    */
-}
-
-UpdateClock();
-
-clockPos();
 
 function
 
@@ -300,14 +227,12 @@ livelyPropertyListener(name, val) {
             break;
         case "hillColor":
             // tmp = hexToRgb(val);
-            _instance.uniforms.ucolor.value = new THREE.Vector3(tmp.r / 255, tmp.g / 255, tmp.b / 255);
             break;
         case "bgColor":
             background = val;
             init();
             break;
         case "hillOpacityFac":
-            _instance.uniforms.uopacity.value = val / 100;
             break;
     }
 }
@@ -320,3 +245,4 @@ hexToRgb(hex) {
         r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16)
     } : null;
 }
+
