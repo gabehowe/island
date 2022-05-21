@@ -5,15 +5,8 @@ const manager = new THREE.LoadingManager(function () {
     init()
 })
 const loader = new THREE.FileLoader(manager)
-let fShader, vShader;
 let waterFShader, waterVShader
 THREE.Cache.enabled = true;
-loader.load('../shaders/shader.vert', function (data) {
-    vShader = data;
-},);
-loader.load('../shaders/shader.frag', function (data) {
-    fShader = data;
-},);
 loader.load('../shaders/water/shader.frag', function (data) {
     waterFShader = data;
 },);
@@ -205,44 +198,4 @@ function initBloom() {
     renderer.toneMappingExposure = Math.pow(0.9, 4.0)
 }
 
-
-function
-
-livelyPropertyListener(name, val) {
-    switch (name) {
-        case "timeToggle":
-            noClock = !val;
-            break;
-        case "dateToggle":
-            noDate = !val;
-            break;
-        case "_12hour":
-            _12hour = val;
-            break;
-        case "mmddyy":
-            mmddyy = !val;
-            break;
-        case "fontColor":
-            document.querySelector(".p-summary").style.color = val;
-            break;
-        case "hillColor":
-            // tmp = hexToRgb(val);
-            break;
-        case "bgColor":
-            background = val;
-            init();
-            break;
-        case "hillOpacityFac":
-            break;
-    }
-}
-
-function
-
-hexToRgb(hex) {
-    var result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-    return result ? {
-        r: parseInt(result[1], 16), g: parseInt(result[2], 16), b: parseInt(result[3], 16)
-    } : null;
-}
 
