@@ -165,29 +165,52 @@ function buildBuildings(geometry, width, resolvedVertices, citySize, scene) {
 }
 
 function buildRiver(geometry, resolvedVertices, width, citySize) {
-    const riverWidth = 10
-    const endErosion = 0.2;
-    for (let x = 0; x < width; x++) {
-        const distanceFromCenter = Math.abs(x - (width / 2))
+    const riverWidth = 20
+    const endErosion = 1;
 
+    // 1-360 and wraps around, higher numbers are less wild
+    // values less than ~50 are kind of funky
+    const wildFactor = 50
+    let lastPoint = new THREE.Vector3()
+    let lastRotation = 0
+
+    for (let i = 0; i < width * 2; i++) {
+        const newRotation = Math.round(Math.random() * -wildFactor) - lastRotation
+        // const newRotation = 0
+        let newPoint = new THREE.Vector3(Math.ceil(lastPoint.x + (Math.cos(radians(newRotation)))), Math.ceil(lastPoint.y + (Math.sin(radians(newRotation)))), -10)
+
+        const distanceFromCenter = Math.abs(newPoint.x - (width / 2))
+        const index = indexFromCoords(newPoint.x, newPoint.y, width + 1)
+        const point = resolvedVertices[index]
+        if (point === undefined) {
+            // lastPoint = newPoint
+            // lastRotation = newRotation
+            break
+        }
         let min = Math.floor(-riverWidth / 2)
         let max = Math.floor(riverWidth / 2)
-        if (distanceFromCenter > (Math.floor(width / citySize)) && !(inRange(x, width / 2 - 50, width / 2 + 50))) {
-            // console.log(x)
-            min -= Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion + ((Math.random() - 0.5) * 5))
-            max += Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion + ((Math.random() - 0.5) * 5))
-            if (min > Math.floor(-riverWidth / 2)) min = Math.floor(-riverWidth / 2)
-            if (max < Math.floor(riverWidth / 2)) max = Math.floor(riverWidth / 2)
-        }
-        for (let y = min; y < max; y++) {
+        setVertexPoint(geometry.attributes.position.array, new THREE.Vector4(point.x, point.y, -10, point.w), resolvedVertices)
+        // TODO: Fix erosion
+        // if (distanceFromCenter > (Math.floor(width / citySize)) && !(inRange(newPoint.x, width / 2 - 50, width / 2 + 50))) {
+        //     // console.log(x)
+        //     min -= Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion )
+        //     max += Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion )
+        //     if (min > Math.floor(-riverWidth / 2)) min = Math.floor(-riverWidth / 2)
+        //     if (max < Math.floor(riverWidth / 2)) max = Math.floor(riverWidth / 2)
+        // }
+        for (let j = min; j < max; j++) {
+            const x = Math.ceil(newPoint.x + (Math.cos(radians(newRotation + 90)) * j))
+            const y = Math.ceil(newPoint.y + (Math.sin(radians(newRotation + 90)) * j))
 
-            const index = indexFromCoords(x, Math.floor(width / 2) + y, width + 1)
+            const index = indexFromCoords(x, y, width + 1)
             const point = resolvedVertices[index]
             if (!point) continue
             const coords = coordsFromIndex(index, width + 1)
-            const newPoint = new THREE.Vector4(point.x, point.y, -10, index)
-            setVertexPoint(geometry.attributes.position.array, newPoint, resolvedVertices)
+            setVertexPoint(geometry.attributes.position.array, new THREE.Vector4(point.x, point.y, -10, index), resolvedVertices)
         }
+
+        lastPoint = newPoint
+        lastRotation = newRotation
     }
 }
 
@@ -293,7 +316,6 @@ class Island {
         // })
 
         let material = new THREE.MeshStandardMaterial({vertexColors: THREE.VertexColors})
-        material.depthWrite = true;
         material.flatShading = true
 
         if (type === 0) {
@@ -335,6 +357,10 @@ function rotateAboutPoint(obj, point, axis, theta, pointIsWorld) {
     }
 
     obj.rotateOnAxis(axis, theta); // rotate the OBJECT
+}
+
+function radians(degrees) {
+    return degrees * (Math.PI / 180);
 }
 
 export {Island, rotateAboutPoint, Building}
