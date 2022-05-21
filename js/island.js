@@ -166,17 +166,19 @@ function buildBuildings(geometry, width, resolvedVertices, citySize, scene) {
 
 function buildRiver(geometry, resolvedVertices, width, citySize) {
     const riverWidth = 10
-    const endErosion = 0.3;
-    for (let x = 0; x < width ; x++) {
+    const endErosion = 0.2;
+    for (let x = 0; x < width; x++) {
         const distanceFromCenter = Math.abs(x - (width / 2))
 
         let min = Math.floor(-riverWidth / 2)
         let max = Math.floor(riverWidth / 2)
-        // if (distanceFromCenter > (Math.floor(width / citySize)) && !(inRange(x, width / 2 - 50, width / 2 + 50))) {
-        //     // console.log(x)
-        //     min -= Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion * Math.random())
-        //     max += Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion * Math.random())
-        // }
+        if (distanceFromCenter > (Math.floor(width / citySize)) && !(inRange(x, width / 2 - 50, width / 2 + 50))) {
+            // console.log(x)
+            min -= Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion + ((Math.random() - 0.5) * 5))
+            max += Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion + ((Math.random() - 0.5) * 5))
+            if (min > Math.floor(-riverWidth / 2)) min = Math.floor(-riverWidth / 2)
+            if (max < Math.floor(riverWidth / 2)) max = Math.floor(riverWidth / 2)
+        }
         for (let y = min; y < max; y++) {
 
             const index = indexFromCoords(x, Math.floor(width / 2) + y, width + 1)
