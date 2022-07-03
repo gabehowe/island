@@ -1,8 +1,10 @@
-function isAboveWater(point, resolvedVertices, width) {
-    const distance = 5
+function isAboveWater(point, resolvedVertices, width, distance = 5) {
     for (let x = -distance; x <= distance; x++) {
         for (let y = -distance; y <= distance; y++) {
-            if (resolvedVertices[indexFromCoords(point.x + x, point.y + y, width + 1)].z < 0) {
+            const index =  indexFromCoords(point.x + x, point.y + y, width + 1)
+            const vertex = resolvedVertices[index]
+            if (!vertex) continue
+            if (vertex.z < 0) {
                 return true
             }
         }
@@ -125,9 +127,9 @@ function buildBuildings(geometry, width, resolvedVertices, citySize, scene) {
         const coords = coordsFromIndex(i, width + 1)
         const point = resolvedVertices[i]
         const distanceFromCenter = Math.sqrt(Math.pow(point.x, 2) + Math.pow(point.y, 2))
-
         if (distanceFromCenter < ((Math.random() * 10) - 5) + Math.floor(width / citySize)) {
-            if (isAboveWater(coords, resolvedVertices, width)) {
+
+            if (isAboveWater(coords, resolvedVertices, width, 5)) {
                 continue
             }
             if (Math.round(Math.random() * 200) === 1) {
@@ -166,19 +168,20 @@ function buildBuildings(geometry, width, resolvedVertices, citySize, scene) {
 
 function buildRiver(geometry, resolvedVertices, width, citySize) {
     const riverWidth = 20
-    const endErosion = 1;
+    const endErosion = 0.3;
 
     // 1-360 and wraps around, higher numbers are less wild
     // values less than ~50 are kind of funky
     const wildFactor = 50
-    let lastPoint = new THREE.Vector3()
+    let lastPoint = new THREE.Vector2()
     let lastRotation = 0
+    let lastYPoints = {}
 
     for (let i = 0; i < width * 2; i++) {
         const newRotation = Math.round(Math.random() * -wildFactor) - lastRotation
         // const newRotation = 0
-        let newPoint = new THREE.Vector3(Math.ceil(lastPoint.x + (Math.cos(radians(newRotation)))), Math.ceil(lastPoint.y + (Math.sin(radians(newRotation)))), -10)
-
+        let newPoint = new THREE.Vector2(Math.ceil(lastPoint.x + (Math.cos(radians(newRotation)))), Math.ceil(lastPoint.y + (Math.sin(radians(newRotation)))))
+        let next = new THREE.Vector2(Math.ceil(newPoint.x + Math.cos(radians(newRotation))), Math.ceil(newPoint.x + Math.sin(radians(newRotation))))
         const distanceFromCenter = Math.abs(newPoint.x - (width / 2))
         const index = indexFromCoords(newPoint.x, newPoint.y, width + 1)
         const point = resolvedVertices[index]
@@ -191,25 +194,45 @@ function buildRiver(geometry, resolvedVertices, width, citySize) {
         let max = Math.floor(riverWidth / 2)
         setVertexPoint(geometry.attributes.position.array, new THREE.Vector4(point.x, point.y, -10, point.w), resolvedVertices)
         // TODO: Fix erosion
-        // if (distanceFromCenter > (Math.floor(width / citySize)) && !(inRange(newPoint.x, width / 2 - 50, width / 2 + 50))) {
-        //     // console.log(x)
-        //     min -= Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion )
-        //     max += Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion )
-        //     if (min > Math.floor(-riverWidth / 2)) min = Math.floor(-riverWidth / 2)
-        //     if (max < Math.floor(riverWidth / 2)) max = Math.floor(riverWidth / 2)
-        // }
+        if (distanceFromCenter > (Math.floor(width / citySize)) && !(inRange(newPoint.x, width / 2 - 50, width / 2 + 50))) {
+            // console.log(x)
+            min -= Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion )
+            max += Math.round((distanceFromCenter - Math.floor(width / citySize)) * endErosion )
+            if (min > Math.floor(-riverWidth / 2)) min = Math.floor(-riverWidth / 2)
+            if (max < Math.floor(riverWidth / 2)) max = Math.floor(riverWidth / 2)
+        }
+        const newYPoints = {}
         for (let j = min; j < max; j++) {
-            const x = Math.ceil(newPoint.x + (Math.cos(radians(newRotation + 90)) * j))
-            const y = Math.ceil(newPoint.y + (Math.sin(radians(newRotation + 90)) * j))
+            const strangeX = Math.ceil(newPoint.x + (Math.cos(radians(newRotation + 90)) * j))
+            const strangeY = Math.ceil(newPoint.y + (Math.sin(radians(newRotation + 90)) * j))
+            // master of the mystic arts over here
+            const x = newPoint.x + j
+            const y = newPoint.y + j
+            const newCoords = new THREE.Vector2(Math.ceil(next.x + Math.cos(radians(newRotation + 90))) * j, Math.ceil(next.y + Math.sin(radians(newRotation + 90)) * j))
+            // newYPoints[j] = (new THREE.Vector2(x, y))
+            // const lastYPoint = lastYPoints[j]
+            // if (lastYPoint) {
+            //     const middle = new THREE.Vector2(Math.round((lastYPoint.x + x) / 2), Math.round((lastYPoint.y + y) / 2) )
+            //     const middleIndex = indexFromCoords(middle.x, middle.y, width + 1)
+            //     const middlePoint = resolvedVertices[middleIndex]
+            //     if (middlePoint) {
+            //         setVertexPoint(geometry.attributes.position.array, new THREE.Vector4(middlePoint.x, middlePoint.y, -10, middleIndex), resolvedVertices)
+            //     }
+            // }
 
             const index = indexFromCoords(x, y, width + 1)
+            const strangeIndex = indexFromCoords(strangeX,strangeY, width + 1)
+            const strangePoint = resolvedVertices[strangeIndex]
+            if (strangePoint) {
+                setVertexPoint(geometry.attributes.position.array, new THREE.Vector4(strangePoint.x, strangePoint.y, -10, strangeIndex), resolvedVertices)
+            }
             const point = resolvedVertices[index]
             if (!point) continue
-            const coords = coordsFromIndex(index, width + 1)
             setVertexPoint(geometry.attributes.position.array, new THREE.Vector4(point.x, point.y, -10, index), resolvedVertices)
         }
 
         lastPoint = newPoint
+        lastYPoints = newYPoints
         lastRotation = newRotation
     }
 }
